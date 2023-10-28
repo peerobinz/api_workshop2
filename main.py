@@ -196,7 +196,15 @@ def get_orders():
     show = Orders.query.all()
     return jsonify([{'order_id' : user.order_id, 'table_id' : user.table_id , 'order_time' : user.order_time , 'status' : user.order_status.name }for user in show])
 
-#Stock
+#Admin Queue
+
+#Admin Chef
+
+#Admin Checkbill
+
+#Admin Stock
+
+#Admin AddStock
 @app.route('/addstock', methods=['POST'])
 def post_AddStock(): #addstock button
     
@@ -214,8 +222,12 @@ def post_AddStock(): #addstock button
     db.session.add(new_item)
     db.session.commit()
     
-    
-    
+#Admin DeleteStock
+
+#Admin EditStock
+
+#Admin Dashboard
+
 # -------------- RUN ---------------
 #(ห้ามแก้ไขบรรทัดนี้เด็ดขาด เนื่องจากเป็น syntax)
 if __name__ == "__main__":
