@@ -112,7 +112,7 @@ db.init_app(app)
 # ------------------- USER UI INTERFACE ----------------------
 
 # Orders
-@app.route('/Orers/menus', methods=['GET'])
+@app.route('/Orders/menus', methods=['GET'])
 def get_Menus():
     menus = MenuItems.query.all()
     return jsonify([{'item_id': item.item_id, 'item_name': item.item_name, 'item_price': item.item_price} for item in menus])
@@ -139,7 +139,7 @@ def get_order_detail(item_id):
     })
 
 # oder-confirm
-@app.route('/OderConfirm/PlaceOrder', methods=['POST'])
+@app.route('/OrderConfirm/PlaceOrder', methods=['POST'])
 def place_order():
     # รับข้อมูลจาก JSON ที่ส่งมา
     data = request.json
@@ -243,6 +243,21 @@ def add_table():
 
     # ส่งกลับ response แสดงว่าการทำงานสำเร็จ
     return jsonify({"message": "Table added successfully", "table_id": new_table.table_id}), 201
+
+@app.route('/table/<int:table_number>', methods=['DELETE'])
+def delete_table_by_number(table_number):
+    # ค้นหา table ที่ต้องการลบจากฐานข้อมูลด้วย table_number
+    table_to_delete = Table.query.filter_by(table_number=table_number).first()
+
+    # ตรวจสอบว่ามี table นี้ในฐานข้อมูลหรือไม่
+    if not table_to_delete:
+        return jsonify({"error": "Table not found!"}), 404
+
+    # ลบ table นี้
+    db.session.delete(table_to_delete)
+    db.session.commit()
+
+    return jsonify({"message": f"Table with table number {table_number} has been deleted."}), 200
 
 # admin Orders
 @app.route('/adminorders/showorders/<int:table_id>', methods=['GET'])
