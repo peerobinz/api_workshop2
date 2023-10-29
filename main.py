@@ -102,10 +102,20 @@ def get_Pic():
     pic_menu = MenuItems.query.all()
     return jsonify([{'item_picture_url' : pic.item_picture_url} for pic in pic_menu])
 
-@app.route('/OrderDetail', methods= ['GET'])
-def get_OrderDetail():
-    detail = MenuItems.query.all()
-    return jsonify([{'item_id': item.item_id, 'item_name': item.item_name , 'item_price' : item.item_price , 'item_description' : item.item_description , 'item_picture_url' : item.item_picture_url} for item in detail])
+@app.route('/OrderDetail/<int:item_id>', methods=['GET'])
+def get_order_detail(item_id):
+    menu_item = MenuItems.query.get(item_id)
+    if not menu_item:
+        return jsonify({'message': 'Menu item not found!'}), 404
+
+    return jsonify({
+        'item_id': menu_item.item_id,
+        'item_name': menu_item.item_name,
+        'item_description': menu_item.item_description,
+        'item_price': menu_item.item_price,
+        'item_picture_url': menu_item.item_picture_url,
+        'category_id': menu_item.category_id
+    })
 
 #oder-confirm
 @app.route('/placeorder', methods=['POST'])
@@ -157,6 +167,29 @@ def get_order_status(order_id):
     return jsonify(result)
 
 #payment
+@app.route('/payment', methods=['GET'])
+def get_unpaid_orders():
+    # ค้นหา bills ที่ยังไม่ได้ชำระเงิน
+    unpaid_bills = Bills.query.filter_by(is_paid=PaymentStatus['ยังไม่ชำระ']).all()
+
+    results = []
+
+    for bill in unpaid_bills:
+        # สามารถ join ตารางเพื่อรับข้อมูลเพิ่มเติมถ้าจำเป็น
+        order_items = OrderItems.query.filter_by(order_id=bill.table_id).all()
+
+        items = [{'item_name': item.menu_item.item_name, 'quantity': item.quantity, 'price': item.menu_item.item_price}
+                 for item in order_items]
+
+        results.append({
+            'bill_id': bill.bill_id,
+            'table_id': bill.table_id,
+            'total_amount': bill.total_amount,
+            'items': items
+        })
+
+    return jsonify(results)
+
 
 # ------------------- ADMIN UI INTERFACE ----------------------
 
@@ -225,6 +258,39 @@ def post_AddStock(): #addstock button
 #Admin DeleteStock
 
 #Admin EditStock
+
+# 1. ฟังก์ชันแสดงรายละเอียดของอาหาร
+@app.route('/menu/<int:item_id>', methods=['GET'])
+def get_menu_detail(item_id):
+    menu_item = MenuItems.query.get(item_id)
+    if not menu_item:
+        return jsonify({'message': 'Menu item not found!'}), 404
+
+    return jsonify({
+        'item_id': menu_item.item_id,
+        'item_name': menu_item.item_name,
+        'item_description': menu_item.item_description,
+        'item_price': menu_item.item_price,
+        'item_picture_url': menu_item.item_picture_url,
+        'category_id': menu_item.category_id
+    })
+
+# 2. ฟังก์ชันแก้ไขรายละเอียดของอาหาร
+@app.route('/menu/<int:item_id>', methods=['PUT'])
+def update_menu(item_id):
+    menu_item = MenuItems.query.get(item_id)
+    if not menu_item:
+        return jsonify({'message': 'Menu item not found!'}), 404
+
+    data = request.json
+    menu_item.item_name = data.get('item_name', menu_item.item_name)
+    menu_item.item_description = data.get('item_description', menu_item.item_description)
+    menu_item.item_price = data.get('item_price', menu_item.item_price)
+    menu_item.item_picture_url = data.get('item_picture_url', menu_item.item_picture_url)
+    menu_item.category_id = data.get('category_id', menu_item.category_id)
+    
+    db.session.commit()
+    return jsonify({'message': 'Menu item updated successfully!'})
 
 #Admin Dashboard
 
