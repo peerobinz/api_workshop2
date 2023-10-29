@@ -1,5 +1,7 @@
 from flask import Flask, jsonify, make_response, request
 from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime, date
+from sqlalchemy import func
 import enum
 
 app = Flask(__name__)
@@ -69,7 +71,7 @@ class Bills(db.Model):
     table_id = db.Column(db.Integer, db.ForeignKey('Table.table_id'))
     total_amount = db.Column(db.Float)
     is_paid = db.Column(db.Enum(PaymentStatus))
-
+    bill_time = db.Column(db.DateTime)
 
 class Menu_Status(enum.Enum):
     มี = "มี"
@@ -104,23 +106,23 @@ class Categories(db.Model):
     category_name = db.Column(db.String(255))
     category_description = db.Column(db.Text)
 
-
 db.init_app(app)
 
 
 # ------------------- USER UI INTERFACE ----------------------
 
 # Orders
-@app.route('/menus', methods=['GET'])
+@app.route('/Orers/menus', methods=['GET'])
 def get_Menus():
     menus = MenuItems.query.all()
     return jsonify([{'item_id': item.item_id, 'item_name': item.item_name, 'item_price': item.item_price} for item in menus])
 
-@app.route('/pic_url', methods=['GET'])
+@app.route('/Orders/pic_url/<int:item_id>', methods=['GET'])
 def get_Pic():
     pic_menu = MenuItems.query.all()
     return jsonify([{'item_picture_url': pic.item_picture_url} for pic in pic_menu])
 
+#Orders_detail
 @app.route('/OrderDetail/<int:item_id>', methods=['GET'])
 def get_order_detail(item_id):
     menu_item = MenuItems.query.get(item_id)
@@ -137,7 +139,7 @@ def get_order_detail(item_id):
     })
 
 # oder-confirm
-@app.route('/placeorder', methods=['POST'])
+@app.route('/OderConfirm/PlaceOrder', methods=['POST'])
 def place_order():
     # รับข้อมูลจาก JSON ที่ส่งมา
     data = request.json
@@ -165,7 +167,7 @@ def place_order():
     return jsonify({"message": "Order placed successfully", "order_id": new_order.order_id}), 201
 
 # status
-@app.route('/orderstatus/<int:order_id>', methods=['GET'])
+@app.route('/status/orderstatus/<int:order_id>', methods=['GET'])
 def get_order_status(order_id):
     # ดึงข้อมูล OrderItem ทั้งหมดภายใต้ order_id ที่ระบุ
     order_items = OrderItems.query.filter_by(order_id=order_id).all()
@@ -185,30 +187,29 @@ def get_order_status(order_id):
     return jsonify(result)
 
 # payment
-@app.route('/payment', methods=['GET'])
-def get_unpaid_orders():
-    # ค้นหา bills ที่ยังไม่ได้ชำระเงิน
-    unpaid_bills = Bills.query.filter_by(
-        is_paid=PaymentStatus['ยังไม่ชำระ']).all()
+@app.route('/payment/<int:order_id>', methods=['GET'])
+def get_payment_details_by_order_id(order_id):
+    # ค้นหา bill ตาม order_id ที่ระบุ
+    bill = Bills.query.filter_by(table_id=order_id).first()
 
-    results = []
+    # ตรวจสอบว่ามี bill นี้ในฐานข้อมูลหรือไม่
+    if not bill:
+        return jsonify({"error": "Bill not found for the given order_id!"}), 404
 
-    for bill in unpaid_bills:
-        # สามารถ join ตารางเพื่อรับข้อมูลเพิ่มเติมถ้าจำเป็น
-        order_items = OrderItems.query.filter_by(order_id=bill.table_id).all()
+    # ค้นหา order items ตาม order_id
+    order_items = OrderItems.query.filter_by(order_id=order_id).all()
 
-        items = [{'item_name': item.menu_item.item_name, 'quantity': item.quantity, 'price': item.menu_item.item_price}
-                 for item in order_items]
+    items = [{'item_name': item.menu_item.item_name, 'quantity': item.quantity, 'price': item.menu_item.item_price}
+             for item in order_items]
 
-        results.append({
-            'bill_id': bill.bill_id,
-            'table_id': bill.table_id,
-            'total_amount': bill.total_amount,
-            'items': items
-        })
+    result = {
+        'bill_id': bill.bill_id,
+        'table_id': bill.table_id,
+        'total_amount': bill.total_amount,
+        'items': items
+    }
 
-    return jsonify(results)
-
+    return jsonify(result)
 
 # ------------------- ADMIN UI INTERFACE ----------------------
 
@@ -300,6 +301,21 @@ def show_orders_by_time():
     # แปลงข้อมูลในรูปแบบ JSON และส่งกลับ
     return jsonify([{'table_number': order.table_number, 'order_id': order.order_id} for order in orders])
 
+@app.route('/OrderDetail_queue/<int:item_id>', methods=['GET'])
+def get_order_detail_queue(item_id):
+    menu_item = MenuItems.query.get(item_id)
+    if not menu_item:
+        return jsonify({'message': 'Menu item not found!'}), 404
+
+    return jsonify({
+        'item_id': menu_item.item_id,
+        'item_name': menu_item.item_name,
+        'item_description': menu_item.item_description,
+        'item_price': menu_item.item_price,
+        'item_picture_url': menu_item.item_picture_url,
+        'category_id': menu_item.category_id
+    })
+
 @app.route('/show_calls_by_time', methods=['GET'])
 def show_calls_by_time():
     # ดึงข้อมูลจากฐานข้อมูลโดยเรียงตาม call_time และทำการ join กับตาราง Table
@@ -309,6 +325,11 @@ def show_calls_by_time():
     
     # แปลงข้อมูลในรูปแบบ JSON และส่งกลับ
     return jsonify([{'table_number': call.table_number, 'call_id': call.call_id} for call in calls])
+
+@app.route('/bills_order', methods=['GET'])
+def get_bills_by_time():
+    bills = Bills.query.order_by(Bills.bill_time.desc()).all()
+    return jsonify([{'bill_id': bill.bill_id, 'bill_time': bill.bill_time} for bill in bills])
 
 # Admin Chef
 @app.route('/show_orders_by_time_to_chef', methods=['GET'])
@@ -340,6 +361,22 @@ def get_order_item_details(order_id):
     } for item in order_items])
 
 # Admin Checkbill
+@app.route('/billdetails/<int:bill_id>', methods=['GET'])
+def get_bill_details(bill_id):
+    bill = Bills.query.filter_by(bill_id=bill_id).first()
+    
+    if not bill:
+        return jsonify({"error": "Bill not found"}), 404
+
+    table = Table.query.filter_by(table_id=bill.table_id).first()
+
+    return jsonify({
+        'table_number': table.table_number,
+        'bill_time': bill.bill_time,
+        'order_id': bill.order_id,  # ต้องมั่นใจว่ามี field order_id ใน Bills
+        'total_amount': bill.total_amount,
+        'payment_status': bill.is_paid.name
+    })
 
 # Admin Stock
 @app.route('/orderitemStock/<int:menu_id>', methods=['GET'])
@@ -360,9 +397,30 @@ def get_orderitem_Stock_by_menu_id(menu_id):
 
     return jsonify(orderitem_summary)
 
+@app.route('/menuitem/update_status/<int:menu_item_id>', methods=['PUT'])
+def update_menuitem_status(menu_item_id):
+    # ค้นหา menu item ตาม id ที่ระบุ
+    menu_item = MenuItems.query.get(menu_item_id)
+    
+    # ตรวจสอบว่ามี menu item นี้ในฐานข้อมูลหรือไม่
+    if not menu_item:
+        return jsonify({"error": "Menu item not found!"}), 404
+
+    # รับข้อมูลสถานะใหม่ที่ต้องการเปลี่ยน
+    data = request.json
+    new_status = data.get('menu_status')
+    
+    # ตรวจสอบว่าสถานะที่ระบุมาถูกต้องหรือไม่
+    if new_status not in Menu_Status._value2member_map_:
+        return jsonify({"error": f"Invalid status! Possible values are: {', '.join(Menu_Status._value2member_map_.keys())}."}), 400
+
+    # อัพเดตสถานะและบันทึกลงฐานข้อมูล
+    menu_item.menu_status = Menu_Status(new_status)
+    db.session.commit()
+
+    return jsonify({"message": f"Status for menu item {menu_item_id} updated successfully."}), 200
 
 # Admin AddStock
-
 @app.route('/addstock', methods=['POST'])
 def post_AddStock():  # addstock button
 
@@ -381,9 +439,21 @@ def post_AddStock():  # addstock button
     db.session.commit()
 
 # Admin DeleteStock
+@app.route('/deleteitem/<string:item_name>', methods=['DELETE'])
+def delete_item_by_name(item_name):
+    # ค้นหา MenuItem จาก item_name
+    item = MenuItems.query.filter_by(item_name=item_name).first()
+
+    if not item:
+        return jsonify({"error": "Menu item not found"}), 404
+
+    # ลบ item จาก database
+    db.session.delete(item)
+    db.session.commit()
+
+    return jsonify({"message": "Menu item deleted successfully"}), 200
 
 # Admin EditStock
-
 # 1. ฟังก์ชันแสดงรายละเอียดของอาหาร
 @app.route('/menu/<int:item_id>', methods=['GET'])
 def get_menu_detail(item_id):
@@ -420,6 +490,59 @@ def update_menu(item_id):
     return jsonify({'message': 'Menu item updated successfully!'})
 
 # Admin Dashboard
+@app.route('/dashboard/orders_count', methods=['GET'])
+def get_monthly_order_count():
+    # รับเดือนและปีปัจจุบัน
+    current_month = datetime.now().month
+    current_year = datetime.now().year
+
+    # คัดกรอง Orders ที่มีเดือนและปีเดียวกันกับปัจจุบัน
+    monthly_orders = Orders.query.filter(
+        db.extract('month', Orders.order_time) == current_month,
+        db.extract('year', Orders.order_time) == current_year
+    ).all()
+
+    # ส่งกลับจำนวน orders ของเดือนนั้น
+    return jsonify({"orders_count": len(monthly_orders)}), 200
+
+@app.route('/dashboard/today_sales', methods=['GET'])
+def get_today_sales():
+    # รับวันที่ปัจจุบัน
+    today = date.today()
+
+    # คัดกรอง Bills ที่มีวันเดียวกันกับวันปัจจุบัน
+    today_bills = Bills.query.filter(
+        db.func.date(Bills.bill_time) == today
+    ).all()
+
+    # คำนวณยอดขายรวม
+    total_sales = sum(bill.total_amount for bill in today_bills)
+
+    # ส่งกลับยอดขายรวมของวันนี้
+    return jsonify({"today_sales": total_sales}), 200
+
+
+@app.route('/dashboard/top_orders', methods=['GET'])
+def get_top_orders():
+    # รับเดือนปัจจุบัน
+    current_month = datetime.now().month
+
+    # รวม OrderItems และจัดเรียงตาม menu_item_id โดยใช้ group_by
+    top_orders = (
+        db.session.query(OrderItems.menu_item_id, 
+                         func.sum(OrderItems.quantity).label('total_ordered'),
+                         MenuItems.item_name)
+        .join(MenuItems, MenuItems.item_id == OrderItems.menu_item_id)
+        .join(Orders, Orders.order_id == OrderItems.order_id)
+        .filter(func.extract('month', Orders.order_time) == current_month)
+        .group_by(OrderItems.menu_item_id, MenuItems.item_name)
+        .order_by(func.sum(OrderItems.quantity).desc())
+        .limit(3)
+        .all()
+    )
+
+    # แปลงข้อมูลเป็น JSON และส่งกลับ
+    return jsonify([{'menu_item_name': item.item_name, 'total_ordered': item.total_ordered} for item in top_orders]), 200
 
 
 # -------------- RUN ---------------
