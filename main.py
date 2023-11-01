@@ -112,7 +112,7 @@ db.init_app(app)
 # ------------------- USER UI INTERFACE ----------------------
 
 # Orders
-@app.route('/Orers/menus', methods=['GET'])
+@app.route('/Orders/menus', methods=['GET'])
 def get_Menus():
     menus = MenuItems.query.all()
     return jsonify([{'item_id': item.item_id, 'item_name': item.item_name, 'item_price': item.item_price} for item in menus])
