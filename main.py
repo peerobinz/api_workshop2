@@ -14,7 +14,7 @@ db = SQLAlchemy()
 class TableStatusEnum(enum.Enum):
     ว่าง = "ว่าง"
     ไม่ว่าง = "ไม่ว่าง"
-
+    
 
 class Table(db.Model):
     __tablename__ = 'Table'
@@ -395,23 +395,24 @@ def get_bill_details(bill_id):
     })
 
 # Admin Stock
-@app.route('/adminstock/orderitemStock/<int:menu_id>', methods=['GET'])
-def get_orderitem_Stock_by_menu_id(menu_id):
-    # ดึงข้อมูลจากฐานข้อมูลโดยการ join 2 ตารางและ filter ด้วย menu_id
-    results = db.session.query(OrderItems, MenuItems).join(
-        MenuItems, OrderItems.menu_item_id == MenuItems.item_id).filter(MenuItems.item_id == menu_id).all()
+@app.route('/adminstock/orderitemStock', methods=['GET'])
+def get_all_orderitem_Stock():
+    # ดึงข้อมูลทั้งหมดจากตาราง MenuItems
+    all_menu_items = MenuItems.query.all()
 
     # สร้าง response จากข้อมูลที่ได้
-    orderitem_summary = [
+    menu_summary = [
         {
-            'item_name': menu.item_name,
-            'item_price': menu.item_price,
-            'menu_status': menu.menu_status.value  # แสดงสถานะของเมนู
+            'item_id': item.item_id,
+            'item_name': item.item_name,
+            'item_price': item.item_price,
+            'menu_status': item.menu_status.name  # แสดงสถานะของเมนู
         }
-        for menu in results
+        for item in all_menu_items
     ]
 
-    return jsonify(orderitem_summary)
+    return jsonify(menu_summary)
+
 
 @app.route('/adminstock/menuitem/update_status/<int:menu_item_id>', methods=['PUT'])
 def put_menuitem_status(menu_item_id):
