@@ -10,6 +10,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy()
 
+
 class TableStatusEnum(enum.Enum):
     ว่าง = "ว่าง"
     ไม่ว่าง = "ไม่ว่าง"
@@ -24,7 +25,7 @@ class Table(db.Model):
 
 
 class OrdersStatusEnum(enum.Enum):
-    กำลังปรุง = "กำลังปรุง"
+    กําลังปรุง = "กําลังปรุง"
     เสิร์ฟแล้ว = "เสิร์ฟแล้ว"
     ยกเลิก = "ยกเลิก"
 
@@ -115,12 +116,12 @@ db.init_app(app)
 @app.route('/Orders/menus', methods=['GET'])
 def get_Menus():
     menus = MenuItems.query.all()
-    return jsonify([{'item_id': item.item_id, 'item_name': item.item_name, 'item_price': item.item_price} for item in menus])
+    return jsonify([{'item_id': item.item_id, 'item_name': item.item_name, 'item_price': item.item_price , 'itam_picture':item.item_picture_url} for item in menus])
 
-@app.route('/Orders/pic_url/<int:item_id>', methods=['GET'])
-def get_Pic():
-    pic_menu = MenuItems.query.all()
-    return jsonify([{'item_picture_url': pic.item_picture_url} for pic in pic_menu])
+# @app.route('/Orders/pic_url/<int:item_id>', methods=['GET'])
+# def get_Pic():
+#     pic_menu = MenuItems.query.all()
+#     return jsonify([{'item_picture_url': pic.item_picture_url} for pic in pic_menu])
 
 #Orders_detail
 @app.route('/OrderDetail/<int:item_id>', methods=['GET'])
@@ -139,30 +140,28 @@ def get_order_detail(item_id):
     })
 
 # oder-confirm
-@app.route('/OderConfirm/PlaceOrder', methods=['POST'])
-def post_place_order():
+@app.route('/place_order', methods=['POST'])  #need json request
+def place_order():
     # รับข้อมูลจาก JSON ที่ส่งมา
     data = request.json
-
-    # สร้าง order ใหม่
+    
+    # สร้าง Orders object ใหม่
     new_order = Orders(table_id=data['table_id'])
     db.session.add(new_order)
-    db.session.commit()
-
-    # สร้าง OrderItem จากข้อมูลที่ได้
-    order_items = data['items']
-    for item in order_items:
-        new_orderitem = OrderItems(
+    
+    # รับรายการ MenuItems ที่เลือกและสร้าง OrderItems สำหรับแต่ละรายการ
+    for menu_item in data['selected_menu_items']:
+        new_order_item = OrderItems(
             order_id=new_order.order_id,
-            menu_item_id=item['menu_item_id'],
-            quantity=item['quantity'],
-            item_status=ItemsStatusEnum['กําลังปรุง'],
-            note_item=item.get('note_item', '')
+            menu_item_id=menu_item['menu_item_id'],
+            quantity=menu_item['quantity'],
+            item_status=ItemsStatusEnum['กําลังปรุง']
         )
-        db.session.add(new_orderitem)
-
+        db.session.add(new_order_item)
+    
+    # บันทึกทุกอย่างลงฐานข้อมูล
     db.session.commit()
-
+    
     # ส่งกลับ response แสดงว่าการทำงานสำเร็จ
     return jsonify({"message": "Order placed successfully", "order_id": new_order.order_id}), 201
 
@@ -175,12 +174,11 @@ def get_order_status(order_id):
     # แปลงข้อมูลเป็นรูปแบบ JSON
     result = []
     for item in order_items:
+        menu_item = MenuItems.query.get(item.menu_item_id)
         result.append({
-            'order_item_id': item.order_item_id,
-            'menu_item_id': item.menu_item_id,
-            'quantity': item.quantity,
-            'item_status': item.item_status.name,
-            'note_item': item.note_item
+            'order_id': item.order_id,
+            'menu_item_name': menu_item.item_name,
+            'item_status': item.item_status.name
         })
 
     # ส่งกลับข้อมูลในรูปแบบ JSON
@@ -226,15 +224,16 @@ def get_statustable():
 
 @app.route('/table/addtable', methods=['POST'])
 def post_add_table():
-    # รับข้อมูลจาก JSON ที่ส่งมา
-    data = request.json
+    # ค้นหา table_number ที่มากที่สุดในฐานข้อมูล
+    max_table_number = db.session.query(db.func.max(Table.table_number)).scalar()
+    if max_table_number is None:
+        max_table_number = 0  # ถ้าไม่มีข้อมูล ให้เริ่มที่ 0
 
-    # สร้าง Table ใหม่จากข้อมูลที่ได้
+    # สร้าง Table ใหม่โดยกำหนด table_number ให้มากกว่าค่าที่มากที่สุดที่พบ
     new_table = Table(
-        table_number=data['table_number'],
+        table_number=max_table_number + 1,
         is_occupied=TableStatusEnum['ว่าง'],
-        # ถ้าไม่มี qr_code ใน JSON จะใช้ค่าว่าง
-        qr_code=data.get('qr_code', '')
+        qr_code=""  # ถ้าไม่ต้องการ qr_code สามารถตั้งค่าเป็นสตริงว่าง
     )
 
     # บันทึกลงฐานข้อมูล
@@ -244,20 +243,22 @@ def post_add_table():
     # ส่งกลับ response แสดงว่าการทำงานสำเร็จ
     return jsonify({"message": "Table added successfully", "table_id": new_table.table_id}), 201
 
-@app.route('/table/<int:table_number>', methods=['DELETE'])
-def delete_table_by_number(table_number):
-    # ค้นหา table ที่ต้องการลบจากฐานข้อมูลด้วย table_number
-    table_to_delete = Table.query.filter_by(table_number=table_number).first()
+
+@app.route('/table/deletetable', methods=['DELETE'])
+def delete_table_number():
+    # ค้นหา table ที่มี table_number มากที่สุด
+    table_to_delete = Table.query.order_by(Table.table_number.desc()).first()
 
     # ตรวจสอบว่ามี table นี้ในฐานข้อมูลหรือไม่
     if not table_to_delete:
-        return jsonify({"error": "Table not found!"}), 404
+        return jsonify({"error": "No tables found!"}), 404
 
     # ลบ table นี้
     db.session.delete(table_to_delete)
     db.session.commit()
 
-    return jsonify({"message": f"Table with table number {table_number} has been deleted."}), 200
+    return jsonify({"message": f"Table with the highest table number {table_to_delete.table_number} has been deleted."}), 200
+
 
 # admin Orders
 @app.route('/adminorders/showorders/<int:table_id>', methods=['GET'])
