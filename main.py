@@ -118,10 +118,10 @@ def get_Menus():
     menus = MenuItems.query.all()
     return jsonify([{'item_id': item.item_id, 'item_name': item.item_name, 'item_price': item.item_price , 'itam_picture':item.item_picture_url} for item in menus])
 
-# @app.route('/Orders/pic_url/<int:item_id>', methods=['GET'])
-# def get_Pic():
-#     pic_menu = MenuItems.query.all()
-#     return jsonify([{'item_picture_url': pic.item_picture_url} for pic in pic_menu])
+@app.route('/Orders/pic_url', methods=['GET'])
+def get_Pic():
+    pic_menu = MenuItems.query.all()
+    return jsonify([{'item_picture_url': pic.item_picture_url} for pic in pic_menu])
 
 #Orders_detail
 @app.route('/OrderDetail/<int:item_id>', methods=['GET'])
@@ -243,6 +243,28 @@ def post_add_table():
     # ส่งกลับ response แสดงว่าการทำงานสำเร็จ
     return jsonify({"message": "Table added successfully", "table_id": new_table.table_id}), 201
 
+@app.route('/table/update_status_table/<int:table_id>', methods=['PUT'])
+def update_table_status(table_id):
+    # ค้นหาโต๊ะตาม id ที่ระบุ
+    table = Table.query.get(table_id)
+    
+    # ตรวจสอบว่ามีโต๊ะนี้ในฐานข้อมูลหรือไม่
+    if not table:
+        return jsonify({"error": "Table not found!"}), 404
+
+    # รับข้อมูลสถานะใหม่ที่ต้องการเปลี่ยน
+    data = request.json
+    new_status = data.get('is_occupied')
+    
+    # ตรวจสอบว่าสถานะที่ระบุมาถูกต้องหรือไม่
+    if new_status not in TableStatusEnum._value2member_map_:
+        return jsonify({"error": f"Invalid status! Possible values are: {', '.join(TableStatusEnum._value2member_map_.keys())}."}), 400
+
+    # อัพเดตสถานะและบันทึกลงฐานข้อมูล
+    table.is_occupied = TableStatusEnum(new_status)
+    db.session.commit()
+
+    return jsonify({"message": f"Status for table {table_id} updated successfully."}), 200
 
 @app.route('/table/deletetable', methods=['DELETE'])
 def delete_table_number():
