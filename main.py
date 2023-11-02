@@ -486,10 +486,11 @@ def put_menuitem_status(menu_item_id):
 
 # Admin AddStock
 @app.route('/adminstock/addstock', methods=['POST'])
-def post_AddStock():  # addstock button
-
+def post_AddStock():
+    # รับข้อมูลจาก JSON ที่ส่งมา
     data = request.json
 
+    # สร้าง object ใหม่จากข้อมูลที่ได้
     new_item = MenuItems(
         item_name=data['item_name'],
         item_description=data['item_description'],
@@ -501,6 +502,9 @@ def post_AddStock():  # addstock button
     # เพิ่มข้อมูลใหม่เข้าฐานข้อมูล
     db.session.add(new_item)
     db.session.commit()
+
+    # ส่งกลับ response แสดงว่าการทำงานสำเร็จ
+    return jsonify({"message": "New item added successfully", "item_id": new_item.item_id}), 201
 
 # Admin DeleteStock
 @app.route('/adminstock/deleteitem/<string:item_name>', methods=['DELETE'])
