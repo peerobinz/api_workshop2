@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, make_response, request
+from flask import Flask, abort, jsonify, make_response, request
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date
 from sqlalchemy import func
@@ -121,7 +121,7 @@ def get_Menus():
 @app.route('/Orders/pic_url', methods=['GET'])
 def get_Pic():
     pic_menu = MenuItems.query.all()
-    return jsonify([{'item_picture_url': pic.item_picture_url} for pic in pic_menu])
+    return jsonify([pic.item_picture_url for pic in pic_menu])
 
 #Orders_detail
 @app.route('/OrderDetail/<int:item_id>', methods=['GET'])
@@ -138,6 +138,31 @@ def get_order_detail(item_id):
         'item_picture_url': menu_item.item_picture_url,
         'category_id': menu_item.category_id
     })
+@app.route('/order/<int:order_id>/add-items', methods=['POST'])
+def add_items_to_order(order_id):
+    # รับข้อมูลจาก JSON ที่ส่งมา
+    data = request.json
+    items = data.get('items')
+    
+    # ตรวจสอบว่ามีข้อมูล items หรือไม่
+    if not items:
+        abort(400, description="No items provided.")
+    
+    # สร้าง OrderItems ใหม่สำหรับแต่ละเมนูอาหารที่เลือก
+    for item in items:
+        new_order_item = OrderItems(
+            order_id=order_id,
+            menu_item_id=order_id,  # กำหนดให้ menu_item_id เท่ากับ order_item_id
+            quantity=item.get('quantity', 1),  # ค่าเริ่มต้นคือ 1 หากไม่ระบุ
+            item_status='กําลังปรุง',  # หรือสถานะเริ่มต้นอื่นๆ ตามที่คุณกำหนด
+            note_item=item.get('note_item', '')  # หมายเหตุเพิ่มเติมหากมี
+        )
+        db.session.add(new_order_item)
+    
+    # บันทึกการเปลี่ยนแปลงลงฐานข้อมูล
+    db.session.commit()
+
+    return jsonify({"message": f"Items added to order {order_id} successfully."}), 201
 
 # oder-confirm
 @app.route('/place_order', methods=['POST'])  #need json request
