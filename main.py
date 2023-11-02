@@ -190,6 +190,52 @@ def place_order():
     # ส่งกลับ response แสดงว่าการทำงานสำเร็จ
     return jsonify({"message": "Order placed successfully", "order_id": new_order.order_id}), 201
 
+@app.route('/menuitem/picture/<string:item_name>', methods=['GET'])
+def get_menu_item_picture(item_name):
+    # ค้นหาเมนูอาหารตามชื่อที่ระบุ
+    menu_item = MenuItems.query.filter_by(item_name=item_name).first()
+
+    # ตรวจสอบว่ามีเมนูอาหารนี้ในฐานข้อมูลหรือไม่
+    if not menu_item:
+        return jsonify({'message': 'Menu item not found!'}), 404
+
+    # ส่งกลับ URL ของรูปภาพของเมนูอาหาร
+    return jsonify({
+        'item_name': menu_item.item_name,
+        'item_picture_url': menu_item.item_picture_url
+    })
+    
+@app.route('/order/<int:order_id>/add-item-by-name', methods=['POST'])
+def add_menu_item_to_order_by_name(order_id):
+    # รับข้อมูลจาก JSON ที่ส่งมา
+    data = request.json
+    menu_item_name = data.get('menu_item_name')
+    
+    # ตรวจสอบว่ามีข้อมูล menu_item_name หรือไม่
+    if not menu_item_name:
+        return jsonify({"error": "Menu item name is required."}), 400
+    
+    # ค้นหาเมนูอาหารตามชื่อที่ระบุ
+    menu_item = MenuItems.query.filter_by(item_name=menu_item_name).first()
+
+    # ตรวจสอบว่ามีเมนูอาหารนี้ในฐานข้อมูลหรือไม่
+    if not menu_item:
+        return jsonify({"error": "Menu item not found!"}), 404
+
+    # สร้าง OrderItem ใหม่สำหรับเมนูอาหารที่เลือก
+    new_order_item = OrderItems(
+        order_id=order_id,
+        menu_item_id=menu_item.item_id,
+        quantity=data.get('quantity', 1),  # ค่าเริ่มต้นคือ 1 หากไม่ระบุ
+        item_status=ItemsStatusEnum['กำลังปรุง'],  # หรือสถานะเริ่มต้นอื่นๆ ตามที่คุณกำหนด
+        note_item=data.get('note_item', '')  # หมายเหตุเพิ่มเติมหากมี
+    )
+    db.session.add(new_order_item)
+    
+    # บันทึกการเปลี่ยนแปลงลงฐานข้อมูล
+    db.session.commit()
+
+    return jsonify({"message": f"Menu item '{menu_item_name}' added to order {order_id} successfully."}), 201
 # status
 @app.route('/status/orderstatus/<int:order_id>', methods=['GET'])
 def get_order_status(order_id):
