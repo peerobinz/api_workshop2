@@ -453,7 +453,7 @@ def get_all_orderitem_Stock():
             'item_id': item.item_id,
             'item_name': item.item_name,
             'item_price': item.item_price,
-            'menu_status': item.menu_status.name  # แสดงสถานะของเมนู
+            'menu_status': item.menu_status.name if item.menu_status else "ไม่มีข้อมูล"  # แสดงสถานะของเมนู
         }
         for item in all_menu_items
     ]
