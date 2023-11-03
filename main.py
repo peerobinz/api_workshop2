@@ -3,10 +3,10 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
 import enum
-from flask_cors import CORS
+
 
 app = Flask(__name__)
-CORS(app)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://avnadmin:AVNS_zMGhESqA5uEbOxeWshl@mysql-peerobinz-peerobinz.aivencloud.com:13806/AppNotification'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
