@@ -753,6 +753,26 @@ def get_top_orders():
     # แปลงข้อมูลเป็น JSON และส่งกลับ
     return jsonify([{'menu_item_name': item.item_name, 'total_ordered': item.total_ordered} for item in top_orders]), 200
 
+@app.route('/admindashboard/daily-sales_orders', methods=['GET'])
+def daily_sales():
+    # กำหนดวันเริ่มต้นและสิ้นสุดของวันนี้
+    start_of_day = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = start_of_day + timedelta(days=1)
+
+    # ดึงออเดอร์ที่สร้างขึ้นในวันนี้
+    today_orders = Orders.query.filter(
+        Orders.order_time >= start_of_day, 
+        Orders.order_time < end_of_day
+    ).all()
+
+    # คำนวณยอดรวมของออเดอร์ทั้งหมด
+    total_sales = sum(order.total_price for order in today_orders)  # สมมติว่าคุณมีคอลัมน์ total_price
+
+    return jsonify({
+        'date': start_of_day.strftime('%Y-%m-%d'),
+        'total_sales': total_sales,
+        'number_of_orders': len(today_orders)
+    })
 
 # -------------- RUN ---------------
 # (ห้ามแก้ไขบรรทัดนี้เด็ดขาด เนื่องจากเป็น syntax)
