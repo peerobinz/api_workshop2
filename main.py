@@ -25,10 +25,9 @@ class Table(db.Model):
 
 
 class OrdersStatusEnum(enum.Enum):
-    กําลังปรุง = "กําลังปรุง"
+    กำลังปรุง = "กำลังปรุง"
     เสิร์ฟแล้ว = "เสิร์ฟแล้ว"
     ยกเลิก = "ยกเลิก"
-
 
 class Orders(db.Model):
     __tablename__ = 'Orders'
@@ -205,37 +204,65 @@ def get_menu_item_picture(item_name):
         'item_picture_url': menu_item.item_picture_url
     })
     
-@app.route('/order/<int:order_id>/add-item-by-name', methods=['POST'])
-def add_menu_item_to_order_by_name(order_id):
+@app.route('/order/create-and-add-items', methods=['POST'])
+def create_order_and_add_items():
     # รับข้อมูลจาก JSON ที่ส่งมา
     data = request.json
-    menu_item_name = data.get('menu_item_name')
+    table_id = data.get('table_id')
+    items = data.get('items')
     
-    # ตรวจสอบว่ามีข้อมูล menu_item_name หรือไม่
-    if not menu_item_name:
-        return jsonify({"error": "Menu item name is required."}), 400
-    
-    # ค้นหาเมนูอาหารตามชื่อที่ระบุ
-    menu_item = MenuItems.query.filter_by(item_name=menu_item_name).first()
+    if not table_id or not items:
+        return jsonify({"error": "Table ID and items are required."}), 400
 
-    # ตรวจสอบว่ามีเมนูอาหารนี้ในฐานข้อมูลหรือไม่
-    if not menu_item:
-        return jsonify({"error": "Menu item not found!"}), 404
+    # สร้าง order ใหม่
+    new_order = Orders(table_id=table_id, order_status=OrdersStatusEnum["กําลังปรุง"])
+    db.session.add(new_order)
+    db.session.commit()
 
-    # สร้าง OrderItem ใหม่สำหรับเมนูอาหารที่เลือก
-    new_order_item = OrderItems(
-        order_id=order_id,
-        menu_item_id=menu_item.item_id,
-        quantity=data.get('quantity', 1),  # ค่าเริ่มต้นคือ 1 หากไม่ระบุ
-        item_status=ItemsStatusEnum['กำลังปรุง'],  # หรือสถานะเริ่มต้นอื่นๆ ตามที่คุณกำหนด
-        note_item=data.get('note_item', '')  # หมายเหตุเพิ่มเติมหากมี
-    )
-    db.session.add(new_order_item)
+    # ค้นหาและเพิ่ม order items ตามชื่อเมนูที่ระบุ
+    for item in items:
+        menu_item_name = item.get('item_name')
+        quantity = item.get('quantity', 1)
+
+        # ค้นหาเมนูอาหารตามชื่อที่ระบุ
+        menu_item = MenuItems.query.filter_by(item_name=menu_item_name).first()
+
+        # ตรวจสอบว่ามีเมนูอาหารนี้ในฐานข้อมูลหรือไม่
+        if not menu_item:
+            continue  # หรืออาจจะ handle แบบอื่นตามความเหมาะสม
+        
+        # สร้าง OrderItem ใหม่สำหรับเมนูอาหารที่เลือก
+        new_order_item = OrderItems(
+            order_id=new_order.order_id,
+            menu_item_id=menu_item.item_id,
+            quantity=quantity,
+            item_status=ItemsStatusEnum['กําลังปรุง'],  # หรือสถานะเริ่มต้นอื่นๆ ตามที่คุณกำหนด
+            note_item=item.get('note_item', '')  # หมายเหตุเพิ่มเติมหากมี
+        )
+        db.session.add(new_order_item)
     
     # บันทึกการเปลี่ยนแปลงลงฐานข้อมูล
     db.session.commit()
 
-    return jsonify({"message": f"Menu item '{menu_item_name}' added to order {order_id} successfully."}), 201
+    return jsonify({"message": f"New order created with ID {new_order.order_id} and items added successfully."}), 201
+
+@app.route('/order/create', methods=['POST'])
+def create_order():
+    # รับข้อมูลจาก JSON ที่ส่งมา
+    data = request.json
+    table_id = data.get('table_id')
+    
+    if not table_id:
+        return jsonify({"error": "Table ID is required."}), 400
+
+    # สร้าง order ใหม่โดยไม่ต้องระบุ order_id
+    new_order = Orders(table_id=table_id, order_status=OrdersStatusEnum['กําลังปรุง'])
+    db.session.add(new_order)
+    db.session.commit()
+
+    # ส่งกลับ response พร้อม order_id ที่ถูกสร้างอัตโนมัติ
+    return jsonify({"message": "New order created successfully.", "order_id": new_order.order_id}), 201
+
 # status
 @app.route('/status/orderstatus/<int:order_id>', methods=['GET'])
 def get_order_status(order_id):
@@ -356,15 +383,37 @@ def delete_table_number():
 # admin Orders
 @app.route('/adminorders/showorders/<int:table_id>', methods=['GET'])
 def get_orders_by_table(table_id):
+    # ดึงการสั่งซื้อ (orders) ทั้งหมดตาม table_id
     orders = Orders.query.filter_by(table_id=table_id).all()
+    
     if not orders:
         return jsonify({"message": "No orders found for this table"}), 404
-    return jsonify([{
-        'order_id': order.order_id,
-        'table_id': order.table_id,
-        'order_time': order.order_time,
-        'status': order.order_status.name
-    } for order in orders])
+
+    # สำหรับแต่ละ order, ดึง order items และชื่อเมนูที่สั่ง
+    orders_with_items = []
+    for order in orders:
+        order_items = OrderItems.query.filter_by(order_id=order.order_id).all()
+        
+        # สำหรับแต่ละ order item, ดึงชื่อเมนู
+        items_with_menu_names = []
+        for item in order_items:
+            menu_item = MenuItems.query.get(item.menu_item_id)
+            if menu_item:  # ตรวจสอบว่ามีเมนูนี้ในฐานข้อมูลหรือไม่
+                items_with_menu_names.append({
+                    'menu_item_name': menu_item.item_name,
+                    'item_status': item.item_status.name
+                })
+        
+        # เพิ่มข้อมูล order พร้อมชื่อเมนูและสถานะเข้าไปในรายการ
+        orders_with_items.append({
+            'order_id': order.order_id,
+            'table_id': order.table_id,
+            'order_time': order.order_time,
+            'status': order.order_status.name,
+            'items': items_with_menu_names
+        })
+
+    return jsonify(orders_with_items)
 
 @app.route('/adminorders/showorder/<int:order_id>', methods=['GET'])
 def get_order_by_id(order_id):
