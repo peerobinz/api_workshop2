@@ -263,7 +263,7 @@ def create_order():
     db.session.commit()
 
     # ส่งกลับ response พร้อม order_id ที่ถูกสร้างอัตโนมัติ
-    return jsonify({"message": "New order created successfully.", "order_id": new_order.order_id}), 201
+    return jsonify({ "order_id": new_order.order_id}), 201
 
 # status
 @app.route('/status/orderstatus/<int:order_id>', methods=['GET'])
