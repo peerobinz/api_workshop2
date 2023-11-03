@@ -1,6 +1,6 @@
 from flask import Flask, abort, jsonify, make_response, request
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from sqlalchemy import func
 import enum
 from flask_cors import CORS
@@ -637,7 +637,8 @@ def post_AddStock():
         item_description=data['item_description'],
         item_price=data['item_price'],
         item_picture_url=data['item_picture_url'],
-        category_id=data['category_id']
+        category_id=data['category_id'],
+        menu_status='มี'  # กำหนดค่าเริ่มต้นสำหรับ menu_status
     )
 
     # เพิ่มข้อมูลใหม่เข้าฐานข้อมูล
