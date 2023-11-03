@@ -276,11 +276,13 @@ def get_order_status(order_id):
         result.append({
             'order_id': item.order_id,
             'menu_item_name': menu_item.item_name,
+            'note_item': item.note_item,
             'item_status': item.item_status.name
         })
 
     # ส่งกลับข้อมูลในรูปแบบ JSON
     return jsonify(result)
+
 
 # payment
 @app.route('/payment/<int:order_id>', methods=['GET'])
