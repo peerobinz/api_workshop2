@@ -73,6 +73,7 @@ class Bills(db.Model):
     total_amount = db.Column(db.Float)
     is_paid = db.Column(db.Enum(PaymentStatus))
     bill_time = db.Column(db.DateTime)
+    order_id = db.Column(db.Integer , db.ForeignKey('Orders.order_id'))
 
 class Menu_Status(enum.Enum):
     มี = "มี"
@@ -292,7 +293,7 @@ def get_payment_details_by_order_id(order_id):
     bill = Bills.query.filter_by(table_id=order_id).first()
 
     # ตรวจสอบว่ามี bill นี้ในฐานข้อมูลหรือไม่
-    if not bill:
+    if not Bills:
         return jsonify({"error": "Bill not found for the given order_id!"}), 404
 
     # ค้นหา order items ตาม order_id
@@ -310,6 +311,47 @@ def get_payment_details_by_order_id(order_id):
 
     return jsonify(result)
 
+@app.route('/create-bill/<int:order_id>', methods=['POST'])
+def create_bill(order_id):
+    # ตรวจสอบว่ามี Order ID นี้ในฐานข้อมูลหรือไม่
+    order = Orders.query.get(order_id)
+    if not order:
+        return jsonify({"error": "Order ID not found."}), 404
+
+    # สร้างบิลใหม่
+    new_bill = Bills(order_id=order_id)
+    db.session.add(new_bill)
+    db.session.commit()
+
+    return jsonify({"message": f"Bill created with ID {new_bill.bill_id} for order ID {order_id}."}), 201
+
+@app.route('/payment-summary/<int:order_id>', methods=['GET'])
+def payment_summary(order_id):
+    order_items = OrderItems.query.filter_by(order_id=order_id).all()
+    if not order_items:
+        return jsonify({"error": "No items found for this order"}), 404
+
+    total_price = 0
+    payment_details = []
+
+    for order_item in order_items:
+        menu_item = MenuItems.query.get(order_item.menu_item_id)
+        item_total_price = menu_item.item_price * order_item.quantity
+        total_price += item_total_price
+        payment_details.append({
+            'menu_item_name': menu_item.item_name,
+            'quantity': order_item.quantity,
+            'item_price': menu_item.item_price,
+            'item_total_price': item_total_price
+        })
+
+    payment_summary = {
+        'order_id': order_id,
+        'items': payment_details,
+        'total_price': total_price
+    }
+
+    return jsonify(payment_summary)
 # ------------------- ADMIN UI INTERFACE ----------------------
 
 # admin Table
